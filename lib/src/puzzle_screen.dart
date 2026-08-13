@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'game_state.dart';
 import 'grid_point.dart';
+import 'puzzle_level.dart';
 
 class PuzzleScreen extends StatefulWidget {
   const PuzzleScreen({super.key});
@@ -10,7 +11,8 @@ class PuzzleScreen extends StatefulWidget {
 }
 
 class _PuzzleScreenState extends State<PuzzleScreen> {
-  final state = PuzzleState();
+  var levelIndex = 0;
+  late PuzzleState state = PuzzleState(demoLevels[levelIndex]);
 
   void onSwipe(DragEndDetails details) {
     final v = details.velocity.pixelsPerSecond;
@@ -24,15 +26,34 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     });
   }
 
+  void nextLevel() {
+    if (levelIndex >= demoLevels.length - 1) return;
+    setState(() {
+      levelIndex += 1;
+      state = PuzzleState(demoLevels[levelIndex]);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final level = state.level;
     return Scaffold(
-      appBar: AppBar(title: const Text('Swipe Heist')),
+      appBar: AppBar(
+        title: Text('Swipe Heist · ${level.title}'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(child: Text('${levelIndex + 1}/${demoLevels.length}')),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             Text(state.status, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text('Moves ${state.moves}'),
             const SizedBox(height: 20),
             Expanded(
               child: Center(
@@ -43,14 +64,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                     aspectRatio: 1,
                     child: GridView.builder(
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: PuzzleState.size,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: level.size,
                         crossAxisSpacing: 7,
                         mainAxisSpacing: 7,
                       ),
-                      itemCount: PuzzleState.size * PuzzleState.size,
+                      itemCount: level.size * level.size,
                       itemBuilder: (context, index) {
-                        final point = GridPoint(index ~/ PuzzleState.size, index % PuzzleState.size);
+                        final point = GridPoint(index ~/ level.size, index % level.size);
                         return _PuzzleTile(point: point, state: state);
                       },
                     ),
@@ -58,10 +79,20 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                 ),
               ),
             ),
-            FilledButton.tonal(
-              onPressed: () => setState(state.reset),
-              child: const Text('Restart'),
-            ),
+            const SizedBox(height: 16),
+            if (state.complete && levelIndex < demoLevels.length - 1)
+              FilledButton.icon(
+                onPressed: nextLevel,
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('Next job'),
+              )
+            else if (state.complete)
+              const Text('Demo campaign complete')
+            else
+              FilledButton.tonal(
+                onPressed: () => setState(state.reset),
+                child: Text(state.failed ? 'Retry job' : 'Restart'),
+              ),
           ],
         ),
       ),
@@ -76,11 +107,12 @@ class _PuzzleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final level = state.level;
     var label = '';
-    if (PuzzleState.walls.contains(point)) label = '■';
-    if (PuzzleState.hazards.contains(point)) label = '◉';
-    if (point == PuzzleState.objective && !state.collected) label = '◆';
-    if (point == PuzzleState.exit) label = 'EXIT';
+    if (level.walls.contains(point)) label = '■';
+    if (level.hazards.contains(point)) label = '◉';
+    if (point == level.objective && !state.collected) label = '◆';
+    if (point == level.exit) label = 'EXIT';
     if (point == state.player) label = '●';
 
     return Container(
