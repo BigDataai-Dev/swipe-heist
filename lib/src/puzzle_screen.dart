@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'game_analytics.dart';
+import 'game_progress.dart';
 import 'game_state.dart';
 import 'grid_point.dart';
 import 'puzzle_level.dart';
@@ -13,13 +14,29 @@ class PuzzleScreen extends StatefulWidget {
 
 class _PuzzleScreenState extends State<PuzzleScreen> {
   static const analytics = DebugGameAnalytics();
+  final progressStore = GameProgressStore();
 
+  GameProgress? progress;
   var levelIndex = 0;
   late PuzzleState state = PuzzleState(demoLevels[levelIndex]);
 
   @override
   void initState() {
     super.initState();
+    restoreProgress();
+  }
+
+  Future<void> restoreProgress() async {
+    final loaded = await progressStore.load(
+      demoLevels.map((level) => level.id).toList(growable: false),
+    );
+    if (!mounted) return;
+    final restoredIndex = loaded.unlockedLevelIndex.clamp(0, demoLevels.length - 1);
+    setState(() {
+      progress = loaded;
+      levelIndex = restoredIndex;
+      state = PuzzleState(demoLevels[levelIndex]);
+    });
     trackLevelStart();
   }
 
@@ -28,12 +45,25 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       'level_id': state.level.id,
       'level_index': levelIndex,
       'par_moves': state.level.parMoves,
+      'best_stars': progress?.starsFor(state.level.id) ?? 0,
     });
+  }
+
+  Future<void> recordCompletion() async {
+    final current = progress;
+    if (current == null) return;
+    current.recordCompletion(
+      levelId: state.level.id,
+      levelIndex: levelIndex,
+      stars: state.level.starsFor(state.moves),
+    );
+    await progressStore.save(current);
+    if (mounted) setState(() {});
   }
 
   void onSwipe(DragEndDetails details) {
     final v = details.velocity.pixelsPerSecond;
-    if (v.distance < 80 || state.complete || state.failed) return;
+    if (v.distance < 80 || state.complete || state.failed || progress == null) return;
 
     final wasComplete = state.complete;
     final wasFailed = state.failed;
@@ -52,12 +82,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       });
     }
     if (!wasComplete && state.complete) {
+      final stars = state.level.starsFor(state.moves);
       analytics.track('level_complete', {
         'level_id': state.level.id,
         'moves': state.moves,
         'par_moves': state.level.parMoves,
-        'stars': state.level.starsFor(state.moves),
+        'stars': stars,
       });
+      recordCompletion();
     }
   }
 
@@ -86,8 +118,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentProgress = progress;
+    if (currentProgress == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final level = state.level;
     final stars = state.complete ? level.starsFor(state.moves) : 0;
+    final bestStars = currentProgress.starsFor(level.id);
     return Scaffold(
       appBar: AppBar(
         title: Text('Swipe Heist · ${level.title}'),
@@ -104,7 +142,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
           children: [
             Text(state.status, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('Moves ${state.moves} · Par ${level.parMoves}'),
+            Text('Moves ${state.moves} · Par ${level.parMoves} · Best ${bestStars == 0 ? '—' : List.filled(bestStars, '★').join()}'),
             if (state.complete) ...[
               const SizedBox(height: 8),
               Text(
