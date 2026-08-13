@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'game_analytics.dart';
 import 'game_state.dart';
 import 'grid_point.dart';
 import 'puzzle_level.dart';
@@ -11,12 +12,30 @@ class PuzzleScreen extends StatefulWidget {
 }
 
 class _PuzzleScreenState extends State<PuzzleScreen> {
+  static const analytics = DebugGameAnalytics();
+
   var levelIndex = 0;
   late PuzzleState state = PuzzleState(demoLevels[levelIndex]);
 
+  @override
+  void initState() {
+    super.initState();
+    trackLevelStart();
+  }
+
+  void trackLevelStart() {
+    analytics.track('level_start', {
+      'level_id': state.level.id,
+      'level_index': levelIndex,
+    });
+  }
+
   void onSwipe(DragEndDetails details) {
     final v = details.velocity.pixelsPerSecond;
-    if (v.distance < 80) return;
+    if (v.distance < 80 || state.complete || state.failed) return;
+
+    final wasComplete = state.complete;
+    final wasFailed = state.failed;
     setState(() {
       if (v.dx.abs() > v.dy.abs()) {
         state.move(0, v.dx > 0 ? 1 : -1);
@@ -24,14 +43,41 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         state.move(v.dy > 0 ? 1 : -1, 0);
       }
     });
+
+    if (!wasFailed && state.failed) {
+      analytics.track('level_fail', {
+        'level_id': state.level.id,
+        'moves': state.moves,
+      });
+    }
+    if (!wasComplete && state.complete) {
+      analytics.track('level_complete', {
+        'level_id': state.level.id,
+        'moves': state.moves,
+      });
+    }
+  }
+
+  void restartLevel() {
+    analytics.track('level_restart', {
+      'level_id': state.level.id,
+      'moves_before_restart': state.moves,
+      'after_fail': state.failed,
+    });
+    setState(state.reset);
   }
 
   void nextLevel() {
     if (levelIndex >= demoLevels.length - 1) return;
+    analytics.track('level_next', {
+      'from_level_id': state.level.id,
+      'moves': state.moves,
+    });
     setState(() {
       levelIndex += 1;
       state = PuzzleState(demoLevels[levelIndex]);
     });
+    trackLevelStart();
   }
 
   @override
@@ -90,7 +136,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
               const Text('Demo campaign complete')
             else
               FilledButton.tonal(
-                onPressed: () => setState(state.reset),
+                onPressed: restartLevel,
                 child: Text(state.failed ? 'Retry job' : 'Restart'),
               ),
           ],
