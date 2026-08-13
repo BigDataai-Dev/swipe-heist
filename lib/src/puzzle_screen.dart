@@ -27,6 +27,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     analytics.track('level_start', {
       'level_id': state.level.id,
       'level_index': levelIndex,
+      'par_moves': state.level.parMoves,
     });
   }
 
@@ -54,6 +55,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       analytics.track('level_complete', {
         'level_id': state.level.id,
         'moves': state.moves,
+        'par_moves': state.level.parMoves,
+        'stars': state.level.starsFor(state.moves),
       });
     }
   }
@@ -72,6 +75,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     analytics.track('level_next', {
       'from_level_id': state.level.id,
       'moves': state.moves,
+      'stars': state.level.starsFor(state.moves),
     });
     setState(() {
       levelIndex += 1;
@@ -83,6 +87,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   @override
   Widget build(BuildContext context) {
     final level = state.level;
+    final stars = state.complete ? level.starsFor(state.moves) : 0;
     return Scaffold(
       appBar: AppBar(
         title: Text('Swipe Heist · ${level.title}'),
@@ -99,7 +104,14 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
           children: [
             Text(state.status, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('Moves ${state.moves}'),
+            Text('Moves ${state.moves} · Par ${level.parMoves}'),
+            if (state.complete) ...[
+              const SizedBox(height: 8),
+              Text(
+                List.filled(stars, '★').join(),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ],
             const SizedBox(height: 20),
             Expanded(
               child: Center(
