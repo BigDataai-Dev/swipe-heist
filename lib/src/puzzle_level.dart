@@ -8,6 +8,7 @@ class PuzzleLevel {
     required this.start,
     required this.objective,
     required this.exit,
+    required this.parMoves,
     this.walls = const <GridPoint>{},
     this.hazards = const <GridPoint>{},
   });
@@ -18,8 +19,15 @@ class PuzzleLevel {
   final GridPoint start;
   final GridPoint objective;
   final GridPoint exit;
+  final int parMoves;
   final Set<GridPoint> walls;
   final Set<GridPoint> hazards;
+
+  int starsFor(int moves) {
+    if (moves <= parMoves) return 3;
+    if (moves <= parMoves + 2) return 2;
+    return 1;
+  }
 }
 
 const demoLevels = <PuzzleLevel>[
@@ -30,6 +38,7 @@ const demoLevels = <PuzzleLevel>[
     start: GridPoint(4, 0),
     objective: GridPoint(1, 3),
     exit: GridPoint(0, 4),
+    parMoves: 8,
     walls: <GridPoint>{GridPoint(1, 1), GridPoint(2, 1), GridPoint(3, 3)},
     hazards: <GridPoint>{GridPoint(2, 3), GridPoint(0, 2)},
   ),
@@ -40,6 +49,7 @@ const demoLevels = <PuzzleLevel>[
     start: GridPoint(4, 4),
     objective: GridPoint(0, 1),
     exit: GridPoint(2, 4),
+    parMoves: 9,
     walls: <GridPoint>{GridPoint(1, 2), GridPoint(2, 2), GridPoint(3, 2)},
     hazards: <GridPoint>{GridPoint(0, 3), GridPoint(3, 4)},
   ),
@@ -50,6 +60,7 @@ const demoLevels = <PuzzleLevel>[
     start: GridPoint(5, 0),
     objective: GridPoint(2, 4),
     exit: GridPoint(0, 5),
+    parMoves: 11,
     walls: <GridPoint>{GridPoint(1, 1), GridPoint(1, 2), GridPoint(3, 3), GridPoint(4, 3)},
     hazards: <GridPoint>{GridPoint(2, 2), GridPoint(4, 5), GridPoint(0, 3)},
   ),
