@@ -31,7 +31,9 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       demoLevels.map((level) => level.id).toList(growable: false),
     );
     if (!mounted) return;
-    final restoredIndex = loaded.unlockedLevelIndex.clamp(0, demoLevels.length - 1);
+    final restoredIndex = loaded.unlockedLevelIndex
+        .clamp(0, demoLevels.length - 1)
+        .toInt();
     setState(() {
       progress = loaded;
       levelIndex = restoredIndex;
