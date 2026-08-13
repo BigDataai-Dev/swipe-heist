@@ -63,6 +63,51 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     if (mounted) setState(() {});
   }
 
+  void selectLevel(int index) {
+    setState(() {
+      levelIndex = index;
+      state = PuzzleState(demoLevels[index]);
+    });
+    trackLevelStart();
+  }
+
+  void openCampaign() {
+    final current = progress!;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView.builder(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          itemCount: demoLevels.length,
+          itemBuilder: (context, index) {
+            final level = demoLevels[index];
+            final unlocked = index <= current.unlockedLevelIndex;
+            final best = current.starsFor(level.id);
+            return ListTile(
+              enabled: unlocked,
+              leading: CircleAvatar(child: Text('${index + 1}')),
+              title: Text(level.title),
+              subtitle: Text(
+                unlocked
+                    ? 'Par ${level.parMoves} · ${best == 0 ? 'Not cleared' : List.filled(best, '★').join()}'
+                    : 'Locked',
+              ),
+              trailing: Icon(unlocked ? Icons.play_arrow_rounded : Icons.lock_outline),
+              onTap: unlocked
+                  ? () {
+                      Navigator.of(context).pop();
+                      selectLevel(index);
+                    }
+                  : null,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void onSwipe(DragEndDetails details) {
     final v = details.velocity.pixelsPerSecond;
     if (v.distance < 80 || state.complete || state.failed || progress == null) return;
@@ -78,10 +123,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     });
 
     if (!wasFailed && state.failed) {
-      analytics.track('level_fail', {
-        'level_id': state.level.id,
-        'moves': state.moves,
-      });
+      analytics.track('level_fail', {'level_id': state.level.id, 'moves': state.moves});
     }
     if (!wasComplete && state.complete) {
       final stars = state.level.starsFor(state.moves);
@@ -111,11 +153,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       'moves': state.moves,
       'stars': state.level.starsFor(state.moves),
     });
-    setState(() {
-      levelIndex += 1;
-      state = PuzzleState(demoLevels[levelIndex]);
-    });
-    trackLevelStart();
+    selectLevel(levelIndex + 1);
   }
 
   @override
@@ -132,6 +170,11 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       appBar: AppBar(
         title: Text('Swipe Heist · ${level.title}'),
         actions: [
+          IconButton(
+            tooltip: 'Campaign',
+            onPressed: openCampaign,
+            icon: const Icon(Icons.grid_view_rounded),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(child: Text('${levelIndex + 1}/${demoLevels.length}')),
@@ -147,10 +190,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
             Text('Moves ${state.moves} · Par ${level.parMoves} · Best ${bestStars == 0 ? '—' : List.filled(bestStars, '★').join()}'),
             if (state.complete) ...[
               const SizedBox(height: 8),
-              Text(
-                List.filled(stars, '★').join(),
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
+              Text(List.filled(stars, '★').join(), style: Theme.of(context).textTheme.headlineSmall),
             ],
             const SizedBox(height: 20),
             Expanded(
