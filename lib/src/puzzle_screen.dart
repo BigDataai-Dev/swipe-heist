@@ -8,6 +8,7 @@ import 'heist_result_card.dart';
 import 'heist_run_summary.dart';
 import 'puzzle_level.dart';
 import 'run_metrics.dart';
+import 'run_quality.dart';
 import 'swipe_input.dart';
 import 'tutorial_progress.dart';
 import 'tutorial_store.dart';
@@ -187,6 +188,15 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         saveTutorial();
       }
       final stars = state.level.starsFor(state.moves);
+      final summary = HeistRunSummary.fromLevel(
+        level: state.level,
+        moves: state.moves,
+        bestStarsBeforeRun: bestStarsBeforeRun,
+      );
+      final quality = RunQuality.evaluate(
+        summary: summary,
+        durationMs: runMetrics.elapsed().inMilliseconds,
+      );
       analytics.track('level_complete', {
         'level_id': state.level.id,
         'moves': state.moves,
@@ -194,6 +204,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         'stars': stars,
         'new_best': stars > bestStarsBeforeRun,
         ...runMetrics.analyticsFields(),
+        ...quality.toAnalytics(),
       });
       recordCompletion();
     }
