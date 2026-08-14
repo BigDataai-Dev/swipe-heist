@@ -5,6 +5,8 @@ import 'game_progress.dart';
 import 'game_state.dart';
 import 'grid_point.dart';
 import 'puzzle_level.dart';
+import 'tutorial_progress.dart';
+import 'tutorial_store.dart';
 
 class PuzzleScreen extends StatefulWidget {
   const PuzzleScreen({super.key});
@@ -16,27 +18,31 @@ class PuzzleScreen extends StatefulWidget {
 class _PuzzleScreenState extends State<PuzzleScreen> {
   static const analytics = DebugGameAnalytics();
   final progressStore = GameProgressStore();
+  final tutorialStore = TutorialStore();
 
   GameProgress? progress;
+  TutorialProgress? tutorial;
   var levelIndex = 0;
   late PuzzleState state = PuzzleState(demoLevels[levelIndex]);
 
   @override
   void initState() {
     super.initState();
-    restoreProgress();
+    restoreState();
   }
 
-  Future<void> restoreProgress() async {
-    final loaded = await progressStore.load(
+  Future<void> restoreState() async {
+    final loadedProgress = await progressStore.load(
       demoLevels.map((level) => level.id).toList(growable: false),
     );
+    final loadedTutorial = await tutorialStore.load();
     if (!mounted) return;
-    final restoredIndex = loaded.unlockedLevelIndex
+    final restoredIndex = loadedProgress.unlockedLevelIndex
         .clamp(0, demoLevels.length - 1)
         .toInt();
     setState(() {
-      progress = loaded;
+      progress = loadedProgress;
+      tutorial = loadedTutorial;
       levelIndex = restoredIndex;
       state = PuzzleState(demoLevels[levelIndex]);
     });
@@ -50,6 +56,11 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       'par_moves': state.level.parMoves,
       'best_stars': progress?.starsFor(state.level.id) ?? 0,
     });
+  }
+
+  Future<void> saveTutorial() async {
+    final current = tutorial;
+    if (current != null) await tutorialStore.save(current);
   }
 
   Future<void> recordCompletion() async {
@@ -131,8 +142,18 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       return;
     }
 
+    final onboarding = tutorial;
+    if (onboarding != null && !onboarding.swipeShown) {
+      onboarding.acknowledgeSwipe();
+      saveTutorial();
+    }
+
     if (!wasCollected && state.collected) {
       HapticFeedback.mediumImpact();
+      if (onboarding != null && !onboarding.lootShown) {
+        onboarding.acknowledgeLoot();
+        saveTutorial();
+      }
     } else {
       HapticFeedback.lightImpact();
     }
@@ -143,6 +164,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
     if (!wasComplete && state.complete) {
       HapticFeedback.heavyImpact();
+      if (onboarding != null && !onboarding.exitShown) {
+        onboarding.acknowledgeExit();
+        saveTutorial();
+      }
       final stars = state.level.starsFor(state.moves);
       analytics.track('level_complete', {
         'level_id': state.level.id,
@@ -174,16 +199,27 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     selectLevel(levelIndex + 1);
   }
 
+  String? tutorialHint() {
+    final onboarding = tutorial;
+    if (onboarding == null || onboarding.complete || levelIndex != 0) return null;
+    return onboarding.nextHint(
+      hasMoved: state.moves > 0,
+      hasLoot: state.collected,
+      isOnExitPath: state.collected && !state.complete,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentProgress = progress;
-    if (currentProgress == null) {
+    if (currentProgress == null || tutorial == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final level = state.level;
     final stars = state.complete ? level.starsFor(state.moves) : 0;
     final bestStars = currentProgress.starsFor(level.id);
+    final hint = tutorialHint();
     return Scaffold(
       appBar: AppBar(
         title: Text('Swipe Heist · ${level.title}'),
@@ -206,6 +242,28 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
             Text(state.status, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
             Text('Moves ${state.moves} · Par ${level.parMoves} · Best ${bestStars == 0 ? '—' : List.filled(bestStars, '★').join()}'),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: hint == null
+                  ? const SizedBox(height: 12)
+                  : Container(
+                      key: ValueKey(hint),
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.touch_app_rounded, size: 18),
+                          const SizedBox(width: 8),
+                          Flexible(child: Text(hint)),
+                        ],
+                      ),
+                    ),
+            ),
             if (state.complete) ...[
               const SizedBox(height: 8),
               Text(List.filled(stars, '★').join(), style: Theme.of(context).textTheme.headlineSmall),
