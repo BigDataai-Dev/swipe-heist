@@ -7,6 +7,8 @@ import 'grid_point.dart';
 import 'heist_result_card.dart';
 import 'heist_run_summary.dart';
 import 'puzzle_level.dart';
+import 'run_metrics.dart';
+import 'swipe_input.dart';
 import 'tutorial_progress.dart';
 import 'tutorial_store.dart';
 
@@ -20,6 +22,7 @@ class PuzzleScreen extends StatefulWidget {
 class _PuzzleScreenState extends State<PuzzleScreen> {
   static const analytics = DebugGameAnalytics();
   static const feedback = SystemGameFeedback();
+  static const inputPolicy = SwipeInputPolicy();
   final progressStore = GameProgressStore();
   final tutorialStore = TutorialStore();
 
@@ -28,6 +31,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   var levelIndex = 0;
   var bestStarsBeforeRun = 0;
   late PuzzleState state = PuzzleState(demoLevels[levelIndex]);
+  RunMetrics runMetrics = RunMetrics();
 
   @override
   void initState() {
@@ -50,6 +54,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       levelIndex = restoredIndex;
       state = PuzzleState(demoLevels[levelIndex]);
       bestStarsBeforeRun = loadedProgress.starsFor(state.level.id);
+      runMetrics = RunMetrics();
     });
     trackLevelStart();
   }
@@ -86,6 +91,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       levelIndex = index;
       state = PuzzleState(demoLevels[index]);
       bestStarsBeforeRun = progress?.starsFor(state.level.id) ?? 0;
+      runMetrics = RunMetrics();
     });
     trackLevelStart();
   }
@@ -130,21 +136,19 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void onSwipe(DragEndDetails details) {
-    final v = details.velocity.pixelsPerSecond;
-    if (v.distance < 80 || state.complete || state.failed || progress == null) {
-      return;
-    }
+    if (state.complete || state.failed || progress == null) return;
+
+    final velocity = details.velocity.pixelsPerSecond;
+    final direction = inputPolicy.classify(dx: velocity.dx, dy: velocity.dy);
+    if (direction == null) return;
+    final delta = inputPolicy.deltaFor(direction);
 
     final beforePlayer = state.player;
     final wasCollected = state.collected;
     final wasComplete = state.complete;
     final wasFailed = state.failed;
     setState(() {
-      if (v.dx.abs() > v.dy.abs()) {
-        state.move(0, v.dx > 0 ? 1 : -1);
-      } else {
-        state.move(v.dy > 0 ? 1 : -1, 0);
-      }
+      state.move(delta.rowDelta, delta.columnDelta);
     });
 
     if (state.player == beforePlayer) {
@@ -173,6 +177,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       analytics.track('level_fail', {
         'level_id': state.level.id,
         'moves': state.moves,
+        ...runMetrics.analyticsFields(),
       });
     }
     if (!wasComplete && state.complete) {
@@ -188,6 +193,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         'par_moves': state.level.parMoves,
         'stars': stars,
         'new_best': stars > bestStarsBeforeRun,
+        ...runMetrics.analyticsFields(),
       });
       recordCompletion();
     }
@@ -199,10 +205,12 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       'level_id': state.level.id,
       'moves_before_restart': state.moves,
       'after_fail': state.failed,
+      ...runMetrics.analyticsFields(),
     });
     setState(() {
       state.reset();
       bestStarsBeforeRun = progress?.starsFor(state.level.id) ?? 0;
+      runMetrics = RunMetrics();
     });
   }
 
@@ -212,6 +220,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       'from_level_id': state.level.id,
       'moves': state.moves,
       'stars': state.level.starsFor(state.moves),
+      ...runMetrics.analyticsFields(),
     });
     selectLevel(levelIndex + 1);
   }
