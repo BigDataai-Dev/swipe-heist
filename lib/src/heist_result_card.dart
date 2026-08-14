@@ -49,75 +49,156 @@ class _HeistResultCardState extends State<HeistResultCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final stars = List.filled(widget.summary.stars, '★').join();
     final mastered = plan.emphasis == RunFeedbackEmphasis.mastered;
+    final delta = widget.summary.moves - widget.summary.parMoves;
+    final paceLabel = delta <= 0 ? 'ON PAR' : '+$delta MOVES';
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: mastered
+                ? [
+                    theme.colorScheme.primaryContainer,
+                    theme.colorScheme.tertiaryContainer,
+                  ]
+                : [
+                    theme.colorScheme.surfaceContainerHigh,
+                    theme.colorScheme.surfaceContainer,
+                  ],
+          ),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AnimatedOpacity(
-              opacity: showHeadline ? 1 : 0,
-              duration: const Duration(milliseconds: 180),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.summary.headline,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text('${widget.summary.moves} moves · par ${widget.summary.parMoves}'),
-                      ],
-                    ),
-                  ),
-                  if (mastered)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Icon(Icons.local_fire_department_rounded),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            AnimatedScale(
-              scale: showStars ? 1 : 0.72,
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOutBack,
+            AnimatedSlide(
+              offset: showHeadline ? Offset.zero : const Offset(0, 0.12),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
               child: AnimatedOpacity(
-                opacity: showStars ? 1 : 0,
-                duration: const Duration(milliseconds: 160),
-                child: Text(
-                  stars,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
-                  ),
+                opacity: showHeadline ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            mastered ? 'CLEAN GETAWAY' : 'JOB COMPLETE',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              letterSpacing: 1.8,
+                              fontWeight: FontWeight.w900,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            widget.summary.headline,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              height: 1.05,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        paceLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+            const SizedBox(height: 18),
+            AnimatedScale(
+              scale: showStars ? 1 : 0.72,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutBack,
+              child: AnimatedOpacity(
+                opacity: showStars ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(3, (index) {
+                    final earned = index < widget.summary.stars;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Icon(
+                        earned ? Icons.star_rounded : Icons.star_outline_rounded,
+                        size: 42,
+                        color: earned
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${widget.summary.moves} moves',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 9),
+                  child: Text('·'),
+                ),
+                Text('par ${widget.summary.parMoves}'),
+              ],
+            ),
             if (widget.summary.isNewBest) ...[
-              const SizedBox(height: 10),
-              const Row(
-                children: [
-                  Icon(Icons.emoji_events_rounded, size: 18),
-                  SizedBox(width: 7),
-                  Text('New best'),
-                ],
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.emoji_events_rounded, size: 19),
+                    SizedBox(width: 7),
+                    Text('NEW PERSONAL BEST'),
+                  ],
+                ),
               ),
             ],
-            const SizedBox(height: 12),
-            Text(widget.summary.recommendation),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            Text(
+              widget.summary.recommendation,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.3),
+            ),
+            const SizedBox(height: 18),
             AnimatedOpacity(
               opacity: showCtas ? 1 : 0,
               duration: const Duration(milliseconds: 180),
