@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'campaign_progress_summary.dart';
 import 'game_analytics.dart';
 import 'game_feedback.dart';
 import 'game_progress.dart';
@@ -99,6 +100,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   void openCampaign() {
     final current = progress!;
+    final summary = CampaignProgressSummary.from(
+      progress: current,
+      levels: demoLevels,
+    );
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -106,8 +111,42 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         child: ListView.builder(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          itemCount: demoLevels.length,
-          itemBuilder: (context, index) {
+          itemCount: demoLevels.length + 1,
+          itemBuilder: (context, itemIndex) {
+            if (itemIndex == 0) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      summary.headline,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${summary.clearedLevels}/${demoLevels.length} jobs cleared · '
+                      '${summary.masteredLevels} mastered · '
+                      '${summary.totalStars}/${summary.maxStars} stars',
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: summary.completionRate.clamp(0, 1),
+                      minHeight: 7,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ],
+                ),
+              );
+            }
+            final index = itemIndex - 1;
             final level = demoLevels[index];
             final unlocked = index <= current.unlockedLevelIndex;
             final best = current.starsFor(level.id);
