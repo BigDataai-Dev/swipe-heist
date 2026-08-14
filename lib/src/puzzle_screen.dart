@@ -4,6 +4,8 @@ import 'game_analytics.dart';
 import 'game_progress.dart';
 import 'game_state.dart';
 import 'grid_point.dart';
+import 'heist_result_card.dart';
+import 'heist_run_summary.dart';
 import 'puzzle_level.dart';
 import 'tutorial_progress.dart';
 import 'tutorial_store.dart';
@@ -23,6 +25,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   GameProgress? progress;
   TutorialProgress? tutorial;
   var levelIndex = 0;
+  var bestStarsBeforeRun = 0;
   late PuzzleState state = PuzzleState(demoLevels[levelIndex]);
 
   @override
@@ -45,6 +48,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       tutorial = loadedTutorial;
       levelIndex = restoredIndex;
       state = PuzzleState(demoLevels[levelIndex]);
+      bestStarsBeforeRun = loadedProgress.starsFor(state.level.id);
     });
     trackLevelStart();
   }
@@ -80,6 +84,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     setState(() {
       levelIndex = index;
       state = PuzzleState(demoLevels[index]);
+      bestStarsBeforeRun = progress?.starsFor(state.level.id) ?? 0;
     });
     trackLevelStart();
   }
@@ -107,7 +112,9 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                     ? 'Par ${level.parMoves} · ${best == 0 ? 'Not cleared' : List.filled(best, '★').join()}'
                     : 'Locked',
               ),
-              trailing: Icon(unlocked ? Icons.play_arrow_rounded : Icons.lock_outline),
+              trailing: Icon(
+                unlocked ? Icons.play_arrow_rounded : Icons.lock_outline,
+              ),
               onTap: unlocked
                   ? () {
                       Navigator.of(context).pop();
@@ -123,7 +130,9 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   void onSwipe(DragEndDetails details) {
     final v = details.velocity.pixelsPerSecond;
-    if (v.distance < 80 || state.complete || state.failed || progress == null) return;
+    if (v.distance < 80 || state.complete || state.failed || progress == null) {
+      return;
+    }
 
     final beforePlayer = state.player;
     final wasCollected = state.collected;
@@ -160,7 +169,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
     if (!wasFailed && state.failed) {
       HapticFeedback.heavyImpact();
-      analytics.track('level_fail', {'level_id': state.level.id, 'moves': state.moves});
+      analytics.track('level_fail', {
+        'level_id': state.level.id,
+        'moves': state.moves,
+      });
     }
     if (!wasComplete && state.complete) {
       HapticFeedback.heavyImpact();
@@ -174,6 +186,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         'moves': state.moves,
         'par_moves': state.level.parMoves,
         'stars': stars,
+        'new_best': stars > bestStarsBeforeRun,
       });
       recordCompletion();
     }
@@ -186,7 +199,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       'moves_before_restart': state.moves,
       'after_fail': state.failed,
     });
-    setState(state.reset);
+    setState(() {
+      state.reset();
+      bestStarsBeforeRun = progress?.starsFor(state.level.id) ?? 0;
+    });
   }
 
   void nextLevel() {
@@ -217,9 +233,16 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
 
     final level = state.level;
-    final stars = state.complete ? level.starsFor(state.moves) : 0;
     final bestStars = currentProgress.starsFor(level.id);
     final hint = tutorialHint();
+    final runSummary = state.complete
+        ? HeistRunSummary.fromLevel(
+            level: level,
+            moves: state.moves,
+            bestStarsBeforeRun: bestStarsBeforeRun,
+          )
+        : null;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Swipe Heist · ${level.title}'),
@@ -241,7 +264,9 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
           children: [
             Text(state.status, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
-            Text('Moves ${state.moves} · Par ${level.parMoves} · Best ${bestStars == 0 ? '—' : List.filled(bestStars, '★').join()}'),
+            Text(
+              'Moves ${state.moves} · Par ${level.parMoves} · Best ${bestStars == 0 ? '—' : List.filled(bestStars, '★').join()}',
+            ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               child: hint == null
@@ -249,7 +274,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                   : Container(
                       key: ValueKey(hint),
                       margin: const EdgeInsets.only(top: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(99),
@@ -264,10 +292,6 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                       ),
                     ),
             ),
-            if (state.complete) ...[
-              const SizedBox(height: 8),
-              Text(List.filled(stars, '★').join(), style: Theme.of(context).textTheme.headlineSmall),
-            ],
             const SizedBox(height: 20),
             Expanded(
               child: Center(
@@ -285,7 +309,10 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
                       ),
                       itemCount: level.size * level.size,
                       itemBuilder: (context, index) {
-                        final point = GridPoint(index ~/ level.size, index % level.size);
+                        final point = GridPoint(
+                          index ~/ level.size,
+                          index % level.size,
+                        );
                         return _PuzzleTile(point: point, state: state);
                       },
                     ),
@@ -294,19 +321,21 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            if (state.complete && levelIndex < demoLevels.length - 1)
-              FilledButton.icon(
-                onPressed: nextLevel,
-                icon: const Icon(Icons.arrow_forward_rounded),
-                label: const Text('Next job'),
+            if (runSummary != null)
+              HeistResultCard(
+                summary: runSummary,
+                onReplay: restartLevel,
+                onNext: levelIndex < demoLevels.length - 1 ? nextLevel : null,
               )
-            else if (state.complete)
-              const Text('Demo campaign complete')
             else
               FilledButton.tonal(
                 onPressed: restartLevel,
                 child: Text(state.failed ? 'Retry job' : 'Restart'),
               ),
+            if (state.complete && levelIndex == demoLevels.length - 1) ...[
+              const SizedBox(height: 10),
+              const Text('Demo campaign complete'),
+            ],
           ],
         ),
       ),
@@ -336,14 +365,20 @@ class _PuzzleTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: point == state.player
-            ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+            ? Border.all(
+                color: Theme.of(context).colorScheme.primary,
+                width: 2,
+              )
             : null,
       ),
       alignment: Alignment.center,
       child: AnimatedScale(
         duration: const Duration(milliseconds: 110),
         scale: point == state.player ? 1.12 : 1,
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
       ),
     );
   }
