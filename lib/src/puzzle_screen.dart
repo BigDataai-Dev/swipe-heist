@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'game_analytics.dart';
+import 'game_feedback.dart';
 import 'game_progress.dart';
 import 'game_state.dart';
 import 'grid_point.dart';
@@ -19,6 +19,7 @@ class PuzzleScreen extends StatefulWidget {
 
 class _PuzzleScreenState extends State<PuzzleScreen> {
   static const analytics = DebugGameAnalytics();
+  static const feedback = SystemGameFeedback();
   final progressStore = GameProgressStore();
   final tutorialStore = TutorialStore();
 
@@ -80,7 +81,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void selectLevel(int index) {
-    HapticFeedback.selectionClick();
+    feedback.play(GameFeedbackCue.select);
     setState(() {
       levelIndex = index;
       state = PuzzleState(demoLevels[index]);
@@ -147,7 +148,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     });
 
     if (state.player == beforePlayer) {
-      HapticFeedback.selectionClick();
+      feedback.play(GameFeedbackCue.blocked);
       return;
     }
 
@@ -158,24 +159,24 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     }
 
     if (!wasCollected && state.collected) {
-      HapticFeedback.mediumImpact();
+      feedback.play(GameFeedbackCue.loot);
       if (onboarding != null && !onboarding.lootShown) {
         onboarding.acknowledgeLoot();
         saveTutorial();
       }
     } else {
-      HapticFeedback.lightImpact();
+      feedback.play(GameFeedbackCue.move);
     }
 
     if (!wasFailed && state.failed) {
-      HapticFeedback.heavyImpact();
+      feedback.play(GameFeedbackCue.fail);
       analytics.track('level_fail', {
         'level_id': state.level.id,
         'moves': state.moves,
       });
     }
     if (!wasComplete && state.complete) {
-      HapticFeedback.heavyImpact();
+      feedback.play(GameFeedbackCue.complete);
       if (onboarding != null && !onboarding.exitShown) {
         onboarding.acknowledgeExit();
         saveTutorial();
@@ -193,7 +194,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void restartLevel() {
-    HapticFeedback.selectionClick();
+    feedback.play(GameFeedbackCue.select);
     analytics.track('level_restart', {
       'level_id': state.level.id,
       'moves_before_restart': state.moves,
