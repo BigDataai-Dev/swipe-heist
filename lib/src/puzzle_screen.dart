@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'game_analytics.dart';
 import 'game_progress.dart';
 import 'game_state.dart';
@@ -64,6 +65,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void selectLevel(int index) {
+    HapticFeedback.selectionClick();
     setState(() {
       levelIndex = index;
       state = PuzzleState(demoLevels[index]);
@@ -112,6 +114,8 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     final v = details.velocity.pixelsPerSecond;
     if (v.distance < 80 || state.complete || state.failed || progress == null) return;
 
+    final beforePlayer = state.player;
+    final wasCollected = state.collected;
     final wasComplete = state.complete;
     final wasFailed = state.failed;
     setState(() {
@@ -122,10 +126,23 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       }
     });
 
+    if (state.player == beforePlayer) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+
+    if (!wasCollected && state.collected) {
+      HapticFeedback.mediumImpact();
+    } else {
+      HapticFeedback.lightImpact();
+    }
+
     if (!wasFailed && state.failed) {
+      HapticFeedback.heavyImpact();
       analytics.track('level_fail', {'level_id': state.level.id, 'moves': state.moves});
     }
     if (!wasComplete && state.complete) {
+      HapticFeedback.heavyImpact();
       final stars = state.level.starsFor(state.moves);
       analytics.track('level_complete', {
         'level_id': state.level.id,
@@ -138,6 +155,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   }
 
   void restartLevel() {
+    HapticFeedback.selectionClick();
     analytics.track('level_restart', {
       'level_id': state.level.id,
       'moves_before_restart': state.moves,
@@ -253,7 +271,9 @@ class _PuzzleTile extends StatelessWidget {
     if (point == level.exit) label = 'EXIT';
     if (point == state.player) label = '●';
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 110),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -262,7 +282,11 @@ class _PuzzleTile extends StatelessWidget {
             : null,
       ),
       alignment: Alignment.center,
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 110),
+        scale: point == state.player ? 1.12 : 1,
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+      ),
     );
   }
 }
