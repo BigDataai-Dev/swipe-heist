@@ -11,6 +11,8 @@ import 'puzzle_level.dart';
 import 'run_metrics.dart';
 import 'run_quality.dart';
 import 'swipe_input.dart';
+import 'tile_presentation.dart';
+import 'tile_role_resolver.dart';
 import 'tutorial_progress.dart';
 import 'tutorial_store.dart';
 
@@ -408,36 +410,50 @@ class _PuzzleTile extends StatelessWidget {
   final GridPoint point;
   final PuzzleState state;
 
+  Color _backgroundFor(BuildContext context, TileRole role) {
+    final scheme = Theme.of(context).colorScheme;
+    return switch (role) {
+      TileRole.player => scheme.primaryContainer,
+      TileRole.loot => scheme.tertiaryContainer,
+      TileRole.exit => scheme.secondaryContainer,
+      TileRole.hazard => scheme.errorContainer,
+      TileRole.wall => scheme.surfaceContainerHigh,
+      TileRole.floor => scheme.surfaceContainerHighest,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
-    final level = state.level;
-    var label = '';
-    if (level.walls.contains(point)) label = '■';
-    if (level.hazards.contains(point)) label = '◉';
-    if (point == level.objective && !state.collected) label = '◆';
-    if (point == level.exit) label = 'EXIT';
-    if (point == state.player) label = '●';
+    final role = tileRoleFor(point: point, state: state);
+    final presentation = presentationFor(role);
+    final isPlayer = role == TileRole.player;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 110),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        border: point == state.player
-            ? Border.all(
-                color: Theme.of(context).colorScheme.primary,
-                width: 2,
-              )
-            : null,
-      ),
-      alignment: Alignment.center,
-      child: AnimatedScale(
+    return Semantics(
+      label: presentation.accessibilityLabel,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 110),
-        scale: point == state.player ? 1.12 : 1,
-        child: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w900),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: _backgroundFor(context, role),
+          border: isPlayer
+              ? Border.all(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 2,
+                )
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 110),
+          scale: isPlayer ? 1.12 : 1,
+          child: Text(
+            presentation.symbol,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: role == TileRole.exit ? 12 : 22,
+            ),
+          ),
         ),
       ),
     );
